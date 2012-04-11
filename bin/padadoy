@@ -1,0 +1,65 @@
+#!/usr/bin/perl
+use strict;
+use warnings;
+
+use 5.010;
+use App::padadoy;
+
+use Getopt::Long;
+use Pod::Usage;
+use Cwd;
+
+my ($help,$version,$config);
+GetOptions(
+    'help|?'   => \$help,
+    'version'  => \$version,
+    'config:s' => \$config,
+) or pod2usage(2);
+pod2usage(1) if $help;
+
+if ($version) {
+    say 'This is padadoy version '.($App::padadoy::VERSION || '??').
+        '. Use -h for help.';
+    exit;
+}
+
+pod2usage('Please specify a command!') unless @ARGV; 
+
+my $cmd = shift @ARGV;
+pod2usage(1) if $cmd eq 'help';
+
+($config) = grep { -r $_ } map { "$_/padadoy.conf" } 
+    ( cwd, '/home/' . (getlogin || getpwuid($<)) ) unless $config;
+
+my $padadoy = App::padadoy->new($config);
+
+if ($cmd !~ /^([a-z]+)$/ or $cmd =~ /^(new|fail)$/ or !$padadoy->can($cmd)) {
+    pod2usage("Unknown command '$cmd'!");
+}
+
+$padadoy->$cmd;
+
+=head1 NAME
+
+padadoy - Simply deploy PSGI applications
+
+=head1 SYNOPSIS
+
+ padadoy [options] <command>
+
+   Commands:
+     init            initialize environment on deployment machine
+     start           start the application
+     stopt           stop the application
+     restart         start or gracefully restart the application if running
+     config          show configuration values
+     status          show some status information
+     create          create a boilerplate application
+
+   Options:
+     -c|--config F   specify some configuration file F. By default first 
+                     ./padadoy.conf and then ~/padadoy.conf is used.
+     -h|--help       show this help message and exit
+     -v|--version    show version number of padadoy and exit
+
+=cut
