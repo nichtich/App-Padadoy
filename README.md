@@ -10,25 +10,27 @@ the following layout, inspired by the PaaS providers dotCloud and OpenShift:
        lib/          - local perl modules (at least the actual application)
        t/            - unit tests
        Makefile.PL   - used to determine required modules and to run tests
+       deplist.txt   - a list of perl modules required to run (o)
       
     data/            - persistent data (o)
 
     dotcloud.yml     - basic configuration for dotCloud (o)
     
-    deplist.txt      - a list of perl modules required to run (o)
-    libs -> app/lib  - symlink for OpenShift (o)
+    libs -> app/lib                - symlink for OpenShift (o)
+    deplist.txt -> app/deplist.txt - symlink for OpenShift (o)
+
     .openshift/      - hooks for OpenShift (o)
        action_hooks/ - scripts that get run every git push (o)
 
     logs/            - logfiles (access and error)
      
 Files and directories marked by `(o)` are optional, depending on what platform
-you want to deploy. Actually you don't need padadoy if you only deploy to
+you want to deploy. Actually you do not need padadoy if you only deploy to
 dotCloud and/or OpenShift (just use their command line clients). But if you
 also want to deploy at your own server, padadoy may facilitate some steps.
 After some initalization, you can simply deploy new versions with `git push`.
 
-Actually, padadoy is just a layer on top of `git`, `Starman`, and `Carton`.
+In short, padadoy is just a layer on top of `git`, `Starman`, and `Carton`.
 
 The [documentation at CPAN](http://search.cpan.org/dist/App-padadoy/), as 
 generated from `lib/App/padadoy.pm` contains some details.

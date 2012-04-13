@@ -9,17 +9,36 @@ use Try::Tiny;
 use IPC::System::Simple qw(run capture);
 use File::Slurp;
 use File::ShareDir qw(dist_file);
+use File::Path qw(make_path);
 use Sys::Hostname;
 use Cwd;
 
 # required for deployment
-use Plack::Handler::Starman;
-use Carton;
+use Plack::Handler::Starman qw();
+use Carton qw();
 
-# some utility functions
-sub _fail ($) {
-    say STDERR shift;
+# required for testing
+use Plack::Test qw();
+use HTTP::Request::Common qw();
+
+our @commands = qw(init start stop restart config status create deplist);
+
+sub _msg (@) {
+    my $fh   = shift;
+    my $text = shift;
+    my $caller=(caller(2))[3];
+    $caller = $caller =~ /^App::padadoy::(.+)/ ? "[$1] " : '';
+    say $fh ($caller . (@_ ? sprintf($text, @_) : $text));
+}
+
+sub fail (@) {
+    _msg *STDERR, @_;
     exit 1;
+}
+
+sub msg {
+    my $self = shift;
+    _msg( *STDOUT, @_ ) unless $self->{quiet};
 }
 
 =method new ( [$config] )
@@ -35,24 +54,24 @@ sub new {
     my $self = bless { }, $class;
 
     if ($config) {
-        # $self->_msg("Reading configuration from $config");
+        # $self->msg("Reading configuration from $config");
         open (my $fh, "<", $config);
         while(<$fh>) {
             next if /^\s*$/;
             if (/^\s*([a-z]+)\s*[:=]\s*(.*?)\s*$/) {
                 $self->{$1} = ($2 // '');         
             } elsif ($_ !~ /^\s*#/) {
-                _fail("syntax error in config file: $_");
+                fail "syntax error in config file: $_";
             }
         }
         close $fh;
     }
 
     $self->{user}       ||= getlogin || getpwuid($<);
-    $self->{home}       ||= '/home/'.$self->{user};
-    $self->{repository} ||= $self->{home}.'/repository';
+    $self->{base}       ||= cwd; # '/base/'.$self->{user};
+    $self->{repository} ||= $self->{base}.'/repository';
     $self->{port}       ||= 6000;
-    $self->{pidfile}    ||= $self->{home}.'/starman.pid';
+    $self->{pidfile}    ||= $self->{base}.'/starman.pid';
 
     $self->{config} = $config;
 
@@ -68,25 +87,103 @@ Create an application boilerplate.
 =cut
 
 sub create {
-    my $self = shift;
+    my $self   = shift;
+    my $module = shift;
+
+    $self->{module} = $module;
+    fail("Invalid module name: $module") 
+        if $module and $module !~ /^([a-z][a-z0-9]*(::[a-z][a-z0-9]*)*)$/i;
 
     $self->_provide_config;
 
-    $self->_msg("[create] app directory");
+    $self->msg('in base directory '.$self->{base});
+    chdir $self->{base};
+
+    $self->msg('app/');
     mkdir 'app';
 
-    $self->_msg("[create] minimal dotcloud.yml");
-    write_file( 'dotcloud.yml', "www:\n  type: perl\n  approot: app" );
+    $self->msg('app/Makefile.PL');
+    write_file('app/Makefile.PL',{no_clobber => 1},
+        read_file(dist_file('App-padadoy','Makefile.PL_')));
 
+    if ( $module ) {
+        $self->msg("app/app.psgi (calling $module)");
+        my $content = read_file(dist_file('App-padadoy','app2.psgi_'));
+        $content =~ s/YOUR_MODULE/$module/mg;
+        write_file('app/app.psgi',{no_clobber => 1},$content);
+
+        my @parts = ('app', 'lib', split('::', $module));
+        my $name = pop @parts;
+
+        my $path = join '/', @parts;
+        $self->msg("$path/");
+        make_path ($path);
+
+        $self->msg("$path/$name.pm");
+        $content = read_file(dist_file('App-padadoy','Module.pm_'));
+        $content =~ s/YOUR_MODULE/$module/mg;
+        write_file( "$path/$name.pm", {no_clobber => 1}, $content );
+
+        $self->msg('app/t/');
+        make_path('app/t');
+
+        $self->msg('app/t/basic.t');
+        my $test = read_file(dist_file('App-padadoy','basic.t_'));
+        $test =~ s/YOUR_MODULE/$module/mg;
+        write_file('app/t/basic.t',{no_clobber => 1},$test);
+    } else {
+        $self->msg('app/app.psgi');
+        write_file('app/app.psgi',{no_clobber => 1},
+            read_file(dist_file('App-padadoy','app1.psgi_')));
+
+        $self->msg('app/lib/');
+        mkdir 'app/lib';
+        write_file('app/lib/.gitkeep',{no_clobber => 1},'');
+
+        $self->msg('app/t/');
+        mkdir 'app/t';
+        write_file('app/t/.gitkeep',{no_clobber => 1},'');
+    }
+
+    $self->msg('data/');
+    mkdir 'data';
+
+    $self->msg('dotcloud.yml');
+    write_file( 'dotcloud.yml',{no_clobber => 1},
+         "www:\n  type: perl\n  approot: app" );
+    
+    my %symlinks = (libs => 'app/lib','deplist.txt' => 'app/deplist.txt');
+    while (my ($from,$to) = each %symlinks) {
+        $self->msg("$from -> $to");
+        symlink $to, $from;
+    }
+
+    # TODO:
+    # .openshift/      - hooks for OpenShift (o)
+    #   action_hooks/  - scripts that get run every git push (o)
+
+    $self->msg('logs/');
+    mkdir 'logs';
+    write_file('logs/.gitignore','*');
+}
+
+=method deplist
+
+List dependencies (not implemented yet).
+
+=cut
+
+sub deplist {
+    my $self = shift;
+
+    eval "use Perl::PrereqScanner::App";
+    if ($@) {
+        fail "Perl::PrereqScanner::App required"
+    }
     # TODO: dependencies should be detectable automatically
     # with Perl::PrereqScanner::App
-    $self->_msg("[create] minimal Makefile.PL");
-    run('cp',dist_file('App-padadoy','Makefile.template'),'app/Makefile.PL');
 
-    $self->_msg("[create] minimal app/app.psgi");
-    run('cp',dist_file('App-padadoy','app.psgi'),'app/app.psgi');
-
-    $self->_msg("[create] You must initialize a git repository and add remotes");
+    $self->msg("You must initialize a git repository and add remotes");
 }
 
 =method init
@@ -97,11 +194,11 @@ Initialize on your deployment machine.
 
 sub init {
     my $self = shift;
-    $self->_msg("Initializing environment");
+    $self->msg("Initializing environment");
 
-    _fail "Expected to run in ".$self->{home} 
-        unless cwd eq $self->{home};
-    _fail 'Expected to run in an EMPTY home directory' 
+    fail "Expected to run in ".$self->{base} 
+        unless cwd eq $self->{base};
+    fail 'Expected to run in an EMPTY base directory' 
         if grep { $_ ne $0 and $_ ne 'padadoy.conf' } <*>;
 
     $self->_provide_config;
@@ -109,23 +206,20 @@ sub init {
     try { 
         run('git', 'init', '--bare', $self->{repository});
     } catch {
-        _fail 'Failed to init git repository in '.$self->{repository}; 
+       fail 'Failed to init git repository in ' . $self->{repository};
     };
 
-    my %scripts = map { chomp; $_ } split /---+\n/, join "", <DATA>;
-    while (my ($file, $content) = each %scripts) {
-        say "creating $file as executable";
-        open my $fh, '>', $file;
-        print $fh $content;
-        close $fh;
-        chmod 0755, $file;
-    }
+    my $file = $self->{repository}.'/hooks/update';
+    $self->msg("$file as executable");
+    write_file($file, read_file(dist_file('App-padadoy','update')));
+    chmod 0755,$file;
 
-    # TODO: current and data dir
-    #run('ln', '-s', 'current/app/logs/', 'logs') unless -e "logs";
-    mkdir "data" unless -d "data";
+    $file = $self->{repository}.'/hooks/post-receive';
+    $self->msg("$file as executable");
+    write_file($file, read_file(dist_file('App-padadoy','post-receive')));
+    chmod 0755,$file;
 
-    $self->_msg("To add as remote: git remote add prod %s@%s:%s", 
+    $self->msg("To add as remote: git remote add prod %s@%s:%s", 
         $self->{user}, hostname, $self->{repository});
 }
 
@@ -154,8 +248,8 @@ sub restart {
 
     my $pid = $self->_pid;
     if ($pid) {
-        $self->_msg( "[restart] Gracefully restarting starman as deamon on port %d (pid in %s)",
-            $self->{port}, $self->{pidfile} );
+        $self->msg("Gracefully restarting starman as deamon on port %d (pid in %s)",
+            $self->{port}, $self->{pidfile});
         run('kill','-HUP',$pid);
     } else {
         $self->start;
@@ -171,12 +265,13 @@ Start starman webserver with carton.
 sub start {
     my $self = shift;
 
-    # TODO: change in app dir
-    chdir 'current/app';
-    $self->_msg( "[start] Starting starman as deamon on port %d (pid in %s)",
-        $self->{port}, $self->{pidfile} );
+    chdir $self->{base}.'/app';
+    $self->msg("Starting starman as deamon on port %d (pid in %s)",
+        $self->{port}, $self->{pidfile});
 
     # TODO: we could better directly use Carton here
+    # I am not fully sure whether this is the right way to use carton
+
     $ENV{PLACK_ENV} = 'production';
     run(qw(carton exec -Ilib -- starman --port),$self->{port},'-D','--pid',$self->{pidfile});
 }
@@ -192,10 +287,10 @@ sub stop {
 
     my $pid = $self->_pid;
     if ( $pid ) {
-        $self->_msg( "[stop] killing old process" );
+        $self->msg("killing old process");
         run('kill',$pid);
     } else {
-        $self->_msg( "[stop] no PID file found" );
+        $self->msg("no PID file found");
     }
 }
 
@@ -215,22 +310,22 @@ Show some status information.
 sub status {
     my $self = shift;
 
-    _fail("No configuration file found") unless $self->{config};
-    say "Configuration from ".$self->{config};
+    fail "No configuration file found" unless $self->{config};
+    $self->msg("Configuration from ".$self->{config});
 
     # PID file?
     my $pid = $self->_pid;
     if ($pid) {
-        say "Process running: $pid (PID in ", $self->{pidfile} . ")";
+        $self->msg("Process running: $pid (PID in %s)", $self->{pidfile});
     } else {
-        say "PID file " . $self->{pidfile} . " not found or broken";
+        $self->msg("PID file %s not found or broken", $self->{pidfile});
     }
 
     my $port = $self->{port};
     
     # something listening on the port?
     my $sock = IO::Socket::INET->new( PeerAddr => "localhost:$port" );
-    say "Port is $port - " . ($sock ? "currently used" : "not used");
+    $self->msg("Port is $port - " . ($sock ? "currently used" : "not used"));
 
     # find out whether this users owns the socket (there should be a better way!) 
     my ($command,$pid2,$user);
@@ -241,17 +336,17 @@ sub status {
             ($command,$pid2,$user) = @f if !$pid2 or $f[1] < $pid2;
         }
     } else {
-        $self->_msg("Not listening at port $port");
+        $self->msg("Not listening at port $port");
     }
 
     if ($sock or $pid2) {
         if ($pid and $pid eq $pid2) {
-            say "Port $port is used by process $pid as given in ".$self->{pidfile};
+            $self->msg("Port $port is used by process $pid as given in ".$self->{pidfile});
         } elsif (!$pid and $user and $user eq $self->{user}) {
-            say "Looks like " . $self->{pidfile} . " is missing (should contain PID $pid2) ".
-                "maybe you run another instance as same user ".$self->{user};
+            $self->msg("Looks like " . $self->{pidfile} . " is missing (should contain PID $pid2) ".
+                "maybe you run another instance as same user ".$self->{user});
         } else {
-            say "Looks like the port $port is used by someone else!"; 
+            $self->msg("Looks like the port $port is used by someone else!"); 
         }
     }
 }
@@ -261,17 +356,11 @@ sub _provide_config {
     return if $self->{config};
 
     $self->{config} = cwd.'/padadoy.conf';
-    $self->_msg("No configuration found - writing defaults to ".$self->{config});
+    say "No configuration found - writing defaults to " . $self->{config} 
+        unless $self->{quiet};
     open (my $fh,'>',$self->{config});
     $self->config($fh);
     close $fh;
-}
-
-sub _msg {
-    my $self = shift;
-    my $msg = shift;
-    return if $self->{quiet};
-    say (@_ ? sprintf($msg, @_) : $msg);
 }
 
 1;
@@ -282,16 +371,33 @@ L<padadoy> is a simple script to facilitate deployment of L<Plack> and/or
 L<Dancer> applications, inspired by L<http://dotcloud.com>. It is based on
 L<Carton> module dependency manager, L<Starman> webserver, and git.
 
-In short, development and deployment with padadoy works like this: Your 
-application must be managed in a git repository with the following structure:
+Your application must be managed in a git repository with following structure:
 
     app/
-      app.psgi    - application startup script
-      lib/        - local application libraries
-      t/          - unit tests
-      Makefile.PL - ..
-    deplist.txt   - application dependencies
-    dotcloud.yml  - additional configuration if you like to push to dotcloud
+       app.psgi      - application startup script
+       lib/          - local perl modules (at least the actual application)
+       t/            - unit tests
+       Makefile.PL   - used to determine required modules and to run tests
+       deplist.txt   - a list of perl modules required to run (o)
+      
+    data/            - persistent data (o)
+
+    dotcloud.yml     - basic configuration for dotCloud (o)
+    
+    libs -> app/lib                - symlink for OpenShift (o)
+    deplist.txt -> app/deplist.txt - symlink for OpenShift (o)
+
+    .openshift/      - hooks for OpenShift (o)
+       action_hooks/ - scripts that get run every git push (o)
+
+    logs/            - logfiles (access and error)
+     
+This structure can quickly be created with C<padadoy create> or C<padadoy
+create Your::App::Module>.  Files and directories marked by `(o)` are optional,
+depending on whether you also want to deploy at dotcloud and/or OpenShift.
+
+
+After some initalization, you can simply deploy new versions with `git push`.
 
 For each deployment machine you create a remote repository and initialize it:
 
@@ -306,16 +412,19 @@ I<This is an early preview release, be warned!>
 
 =head1 SYNOPSIS
 
+I<This needs some cleanup!>
+
+On your development machine
+
+  $ padadoy create Your::App::Module
+  $ git init
+  $ git add *
+  $ git commit -m "inial commit"
+
 On your deployment machine
 
   $ padadoy init
 
-On your development machine
-
-  $ padadoy create
-  $ git init
-  $ git add *
-  $ git commit -m "inial commit"
   $ git remote add ...
   $ git push prod master
 
@@ -379,84 +488,4 @@ to Plack and Dancer.
 
 =cut
 
-__DATA__
-repository/hooks/update
------------------------
-#!/bin/bash
 
-# TODO: put this in padadoy
-
-refname="$1" 
-oldrev="$2" 
-newrev="$3" 
- 
-if [ -z "$refname" -o -z "$oldrev" -o -z "$newrev" ]; then 
-    echo "Usage: $0 <ref> <oldrev> <newrev>" >&2 
-    echo "  where <newrev> is relevant only" >&2
-    exit 1 
-fi 
-
-# Any command that fails will cause the entire script to fail
-set -e
-
-export GIT_WORK_TREE=~/$newrev
-export GIT_DIR=~/repository
-
-cd
-[ -d $GIT_WORK_TREE ] && echo "work tree $GIT_WORK_TREE already exists!" && exit 1
-
-# reuse existing working tree for faster updates
-# TODO: build from scratch if somehow required to do so!
-if [ -d current ]; then
-    rsync -a current/ $GIT_WORK_TREE
-else
-    mkdir $GIT_WORK_TREE
-fi
-
-echo "[UPDATE] Checking out $GIT_DIR in $GIT_WORK_TREE"
-cd $GIT_WORK_TREE
-git checkout -q -f $newrev
-
-echo "[UPDATE] installing dependencies and testing"
-# TODO: Makefile.PL required - fail is missing!
-cd app
-pwd
-carton install
-perl Makefile.PL
-carton exec -Ilib -- make test
-carton exec -Ilib -- make clean
-
-export PLACK_ENV=production
-
-# TODO: test running with starman on testing port!!!
-
-echo "[UPDATE] new -> $GIT_WORK_TREE/app"
-cd
-rm -f new
-ln -s $GIT_WORK_TREE new
-
-echo "[UPDATE] revision $GIT_WORK_TREE installed at ~/new"
-
------------------------------
-repository/hooks/post-receive
------------------------------
-#!/bin/bash
-set -e
-
-# TODO: cd home
-cd
-echo "[POST-RECEIVE] new => current"
-if [ -d "new" ]; then
-    rm -f current
-    mv new current
-else
-    echo "[POST-RECEIVE] missing directory 'new'"
-    exit 1
-fi
-
-# graceful restart seems broken
-# padadoy restart
-padadoy stop
-padadoy start
-
-# TODO: cleanup old revisions

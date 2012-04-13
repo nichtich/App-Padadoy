@@ -1,0 +1,9 @@
+use File::Basename qw(dirname);
+use File::Spec;
+use lib File::Spec->catdir(dirname(__FILE__), 'lib');
+
+use YOUR_MODULE;
+
+my $app = YOUR_MODULE->new;
+
+$app;

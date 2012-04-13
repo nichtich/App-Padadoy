@@ -1,0 +1,57 @@
+#!/bin/bash
+
+# TODO: put this in padadoy
+
+refname="$1" 
+oldrev="$2" 
+newrev="$3" 
+ 
+if [ -z "$refname" -o -z "$oldrev" -o -z "$newrev" ]; then 
+    echo "Usage: $0 <ref> <oldrev> <newrev>" >&2 
+    echo "  where <newrev> is relevant only" >&2
+    exit 1 
+fi 
+
+# Any command that fails will cause the entire script to fail
+set -e
+
+export GIT_WORK_TREE=~/$newrev
+export GIT_DIR=~/repository
+
+cd
+[ -d $GIT_WORK_TREE ] && echo "work tree $GIT_WORK_TREE already exists!" && exit 1
+
+# reuse existing working tree for faster updates
+# TODO: build from scratch if somehow required to do so!
+if [ -d current ]; then
+    rsync -a current/ $GIT_WORK_TREE
+else
+    mkdir $GIT_WORK_TREE
+fi
+
+echo "[UPDATE] Checking out $GIT_DIR in $GIT_WORK_TREE"
+cd $GIT_WORK_TREE
+git checkout -q -f $newrev
+
+echo "[UPDATE] installing dependencies and testing"
+# TODO: Makefile.PL required - fail is missing!
+cd app
+pwd
+carton install
+perl Makefile.PL
+carton exec -Ilib -- make test
+carton exec -Ilib -- make clean
+
+export PLACK_ENV=production
+
+# TODO: test running with starman on testing port!!!
+
+echo "[UPDATE] new -> $GIT_WORK_TREE/app"
+cd
+rm -f new
+ln -s $GIT_WORK_TREE new
+
+echo "[UPDATE] revision $GIT_WORK_TREE installed at ~/new"
+
+
+

@@ -1,0 +1,23 @@
+#!/bin/bash
+# .git/hooks/post-receive
+
+set -e
+
+# TODO: cd base
+cd
+echo "[POST-RECEIVE] new => current"
+if [ -d "new" ]; then
+    rm -f current
+    mv new current
+else
+    echo "[POST-RECEIVE] missing directory 'new'"
+    exit 1
+fi
+
+# graceful restart seems broken
+# padadoy restart
+
+padadoy stop
+padadoy start
+
+# TODO: cleanup old revisions

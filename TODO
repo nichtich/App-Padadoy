@@ -2,7 +2,6 @@ See
 https://www.redhat.com/openshift/community/kb/kb-e1014-how-to-deploy-the-perl-dancer-framework-on-openshift-express
 to support OpenShift
 
-
 |-- deplist.txt
 |-- libs
 |-- misc
@@ -11,6 +10,5 @@ to support OpenShift
 |   `-- index.pl
 `-- README
 
-* always add Plack-Test for basic functionality (200 OK)
 * starman errorlog required
 
