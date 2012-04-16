@@ -400,7 +400,7 @@ sub _provide_config {
     write_file( $self->{config}, $self->_config );
 }
 
-=head1 method cartontest
+=method method cartontest
 
 Update dependencies with carton and run tests.
 
@@ -420,13 +420,58 @@ sub cartontest {
 
 1;
 
+=head1 SYNOPSIS
+
+Create a new application and start it locally on your development machine:
+
+  $ padadoy create Your::Module
+  $ plackup app/app.psgi
+
+Manage your application files in a git repository:
+
+  $ git init
+  $ git add *
+  $ git add -f logs/.gitignore
+  $ git commit -m "inial commit"
+
+Start application locally as deamon with bundled dependencies:
+
+  $ padadoy cartontest
+  $ padadoy start
+
+Show status of your running application and stop it:
+
+  $ padadoy status
+  $ padadoy stop
+
+Deploy the application at dotCloud
+
+  $ dotcloud create nameoryourapp
+  $ dotcloud push nameofyourapp
+
+Prepare your own deployment machine
+
+  $ ssh $SERVER
+  $ padadoy init
+
+Add your deployment machine as git remote and deploy:
+
+  $ git remote add ...
+  $ git push prod master
+
 =head1 DESCRIPTION
+
+I<This is an early preview release, be warned! Design changes are likely,
+at least until a stable carton 1.0 has been released!>
 
 L<padadoy> is a simple script to facilitate deployment of L<Plack> and/or
 L<Dancer> applications, inspired by L<http://dotcloud.com>. It is based on
-L<Carton> module dependency manager, L<Starman> webserver, and git.
+L<Carton> module dependency manager, L<Starman> webserver, and git. In short,
+an application is managed in a git repository and pushed to a remote repository
+for deployment. At the remote server, required modules are installed and
+unit tests are run, to minimize the chance of a broken installation.
 
-Your application must be managed in a git repository with following structure:
+Your application is managed in a git repository with following structure:
 
     app/
        app.psgi      - application startup script
@@ -461,45 +506,6 @@ You may then edit the file C<padadoy.conf> to adjust the port and other
 settings. Back on another machine you can simply push to the deployment
 repository with C<git push>. C<padadoy init> installs some hooks in the
 deployment repository so new code is first tested before activation.
-
-I<This is an early preview release, be warned!>
-
-=head1 SYNOPSIS
-
-Create a new application and start it locally on your development machine:
-
-  $ padadoy create Your::Module
-  $ plackup app/app.psgi
-
-Start application locally as deamon with bundled dependencies
-
-  $ padadoy cartontest
-  $ padadoy start
-
-Show status of your running application and stop it
-  $ padadoy status
-  $ padadoy stop
-
-Deploy the application at dotCloud
-
-  $ dotcloud create nameoryourapp
-  $ dotcloud push nameofyourapp
-
-Collect your application files in a git repository
-
-  $ git init
-  $ git add * logs/.gitignore
-  $ git add -f logs/.gitignore
-  $ git commit -m "inial commit"
-
-Prepare your deployment machine
-
-  $ padadoy init
-
-Add your deployment machine as git remote and deploy
-
-  $ git remote add ...
-  $ git push prod master
 
 =head1 DEPLOYMENT
 
