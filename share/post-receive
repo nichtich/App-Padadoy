@@ -5,6 +5,7 @@ set -e
 
 # TODO: cd base
 cd
+
 echo "[POST-RECEIVE] new => current"
 if [ -d "new" ]; then
     rm -f current
@@ -16,8 +17,8 @@ fi
 
 # graceful restart seems broken
 # padadoy restart
-
-padadoy stop
-padadoy start
+BASE=`pwd`/current
+padadoy stop base=$BASE
+padadoy start base=$BASE
 
 # TODO: cleanup old revisions

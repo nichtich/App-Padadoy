@@ -73,14 +73,15 @@ sub new {
     foreach (qw(user base repository port pidfile logs errrorlog accesslog quiet)) {
         $self->{$_} = $values{$_} if defined $values{$_};
     }
-    
+
     $self->{user}       ||= getlogin || getpwuid($<);
     $self->{base}       ||= cwd; # '/base/'.$self->{user};
     $self->{repository} ||= $self->{base}.'/repository';
     $self->{port}       ||= 6000;
     $self->{pidfile}    ||= $self->{base}.'/starman.pid';
-    $self->{errorlog}   ||= $self->{base}.'/logs/error.log'; 
-    $self->{accesslog}  ||= $self->{base}.'/logs/access.log';
+    $self->{logs}       ||= $self->{base}.'/logs';
+    $self->{errorlog}   ||= $self->{logs}.'/error.log'; 
+    $self->{accesslog}  ||= $self->{logs}.'/access.log';
 
     # config file
     $self->{config} = $config;
@@ -130,7 +131,7 @@ sub create {
         make_path ($path);
 
         $self->msg("$path/$name.pm");
-        $content = read_file(dist_file('App-padadoy','Module.pm'));
+        $content = read_file(dist_file('App-padadoy','Module.pm.template'));
         $content =~ s/YOUR_MODULE/$module/mg;
         write_file( "$path/$name.pm", {no_clobber => 1}, $content );
 
@@ -230,6 +231,9 @@ sub init {
     $self->msg("$file as executable");
     write_file($file, read_file(dist_file('App-padadoy','post-receive')));
     chmod 0755,$file;
+
+    $self->msg("logs -> current/logs");
+    symlink 'current/logs', 'logs';
 
     $self->msg("To add as remote: git remote add prod %s@%s:%s", 
         $self->{user}, hostname, $self->{repository});
@@ -389,6 +393,7 @@ sub _provide_config {
 
     $self->{config} = cwd.'/padadoy.conf';
     $self->msg(\$caller,"Writing default configuration to ".$self->{config});
+    # TODO: better use template with comments instead
     write_file( $self->{config}, $self->_config );
 }
 
