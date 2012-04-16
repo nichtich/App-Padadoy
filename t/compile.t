@@ -1,5 +1,5 @@
 use Test::More;
 
-use_ok('App::padadoy');
+use_ok('App::Padadoy');
 
 done_testing;

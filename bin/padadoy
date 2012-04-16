@@ -1,9 +1,11 @@
 #!/usr/bin/perl
 use strict;
 use warnings;
+#ABSTRACT: Simply deploy PSGI applications
+#PODNAME: padadoy
 
 use 5.010;
-use App::padadoy;
+use App::Padadoy;
 
 use Getopt::Long;
 use Pod::Usage;
@@ -19,7 +21,7 @@ GetOptions(
 pod2usage(1) if $help;
 
 if ($version) {
-    say 'This is padadoy version '.($App::padadoy::VERSION || '??').
+    say 'This is padadoy version '.($App::Padadoy::VERSION || '??').
         '. Use -h for help.';
     exit;
 }
@@ -35,11 +37,13 @@ pod2usage(1) if $cmd eq 'help';
 my $regexp = qr{^([a-z]+)=(.*)$};
 my %values = map  { $_ =~ $regexp; $1 => $2 } 
              grep { $_ =~ $regexp } @ARGV;
-my $padadoy = App::padadoy->new($config,%values);
+pod2usage("Unknown config value $_")
+    for grep { !$App::Padadoy::configs } keys %values;
+my $padadoy = App::Padadoy->new($config,%values);
 $padadoy->{quiet} = 1 if $quiet;
 
 pod2usage("Unknown command '$cmd'!")
-    unless grep { $_ eq $cmd } @App::padadoy::commands;
+    unless grep { $_ eq $cmd } @App::Padadoy::commands;
 
 $padadoy->$cmd( grep { $_ !~ $regexp } @ARGV);
 

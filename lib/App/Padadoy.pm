@@ -1,7 +1,7 @@
 use strict;
 use warnings;
-package App::padadoy;
-#ABSTRACT: Simply deploy PSGI web applications
+package App::Padadoy;
+#ABSTRACT: Simply deploy PSGI applications
 
 use 5.010;
 use autodie;
@@ -23,12 +23,13 @@ use Plack::Test qw();
 use HTTP::Request::Common qw();
 
 our @commands = qw(init start stop restart config status create deplist cartontest);
+our @configs = qw(user base repository port pidfile logs errrorlog accesslog quiet);
 
 # _msg( $fh, [\$caller], $msg [@args] )
 sub _msg (@) { 
     my $fh = shift;
     my $caller = ref($_[0]) ? ${(shift)} :
-            ((caller(2))[3] =~ /^App::padadoy::(.+)/ ? $1 : '');
+            ((caller(2))[3] =~ /^App::Padadoy::(.+)/ ? $1 : '');
     my $text  = shift;
     say $fh (($caller ? "[$caller] " : "") 
         . (@_ ? sprintf($text, @_) : $text));
@@ -70,7 +71,7 @@ sub new {
         close $fh;
     }
 
-    foreach (qw(user base repository port pidfile logs errrorlog accesslog quiet)) {
+    foreach (@configs) {
         $self->{$_} = $values{$_} if defined $values{$_};
     }
 
@@ -515,7 +516,7 @@ The following should work at least with a fresh Ubuntu installation and Perl >=
 
 Now you can install padadoy from CPAN:
 
-  $ sudo cpanm App::padadoy
+  $ sudo cpanm App::Padadoy
 
 Depending on the Perl modules your application requires, you may need some
 additional packages, such as C<libexpat1-dev> for XML. For instance for HTTPS 

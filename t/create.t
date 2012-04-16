@@ -5,15 +5,14 @@ use File::Temp qw(tempdir);
 use File::Spec::Functions;
 use Cwd;
 
-use App::padadoy;
+use App::Padadoy;
 
 my ($cwd) = (cwd =~ /^(.*)$/g); # untainted cwd
 
 my $devdir = tempdir( CLEANUP => 1 );
 chdir $devdir;
 
-my $padadoy = App::padadoy->new;
-$padadoy->{quiet} = 1;
+my $padadoy = App::Padadoy->new('', quiet => 1);
 $padadoy->create('Foo::Bar');
 
 ok( -d catdir($devdir,$_), "$_/ created" )
