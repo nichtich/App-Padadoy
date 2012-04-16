@@ -54,7 +54,7 @@ padadoy - Simply deploy PSGI applications
    Commands:
      init            initialize environment on deployment machine
      start           start the application
-     stopt           stop the application
+     stop            stop the application
      restart         start or gracefully restart the application if running
      config          show configuration values
      status          show some status information

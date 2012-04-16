@@ -176,6 +176,8 @@ sub create {
     $self->msg('logs/');
     mkdir 'logs';
     write_file('logs/.gitignore','*');
+    write_file('logs/access.log','');
+    write_file('logs/error.log','');
 }
 
 =method deplist
@@ -252,7 +254,7 @@ sub config {
 sub _config {
     my $self = shift;
     my $max = max map { length } keys %$self;
-    join "\n", map { sprintf( "%-${max}s = %s", $_, $self->{$_} ) }
+    join "\n", map { sprintf( "%-${max}s = %s", $_, $self->{$_} // '' ) }
         sort keys %$self;
 }
 
