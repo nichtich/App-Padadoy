@@ -6,8 +6,9 @@ package App::padadoy;
 use 5.010;
 use autodie;
 use Try::Tiny;
-use IPC::System::Simple qw(run capture);
+use IPC::System::Simple qw(run capture $EXITVAL);
 use File::Slurp;
+use List::Util qw(max);
 use File::ShareDir qw(dist_file);
 use File::Path qw(make_path);
 use Sys::Hostname;
@@ -15,24 +16,26 @@ use Cwd;
 
 # required for deployment
 use Plack::Handler::Starman qw();
-use Carton qw();
+use Carton qw(0.9.4);
 
 # required for testing
 use Plack::Test qw();
 use HTTP::Request::Common qw();
 
-our @commands = qw(init start stop restart config status create deplist);
+our @commands = qw(init start stop restart config status create deplist cartontest);
 
-sub _msg (@) {
-    my $fh   = shift;
-    my $text = shift;
-    my $caller=(caller(2))[3];
-    $caller = $caller =~ /^App::padadoy::(.+)/ ? "[$1] " : '';
-    say $fh ($caller . (@_ ? sprintf($text, @_) : $text));
+# _msg( $fh, [\$caller], $msg [@args] )
+sub _msg (@) { 
+    my $fh = shift;
+    my $caller = ref($_[0]) ? ${(shift)} :
+            ((caller(2))[3] =~ /^App::padadoy::(.+)/ ? $1 : '');
+    my $text  = shift;
+    say $fh (($caller ? "[$caller] " : "") 
+        . (@_ ? sprintf($text, @_) : $text));
 }
 
 sub fail (@) {
-    _msg *STDERR, @_;
+    _msg(*STDERR, @_);
     exit 1;
 }
 
@@ -41,7 +44,7 @@ sub msg {
     _msg( *STDOUT, @_ ) unless $self->{quiet};
 }
 
-=method new ( [$config] )
+=method new ( [$configfile] [%configvalues] )
 
 Start padadoy, optionally with some configuration. The command line
 client used C<./padadoy.conf> or C<~/padadoy.conf> as config files.
@@ -49,7 +52,7 @@ client used C<./padadoy.conf> or C<~/padadoy.conf> as config files.
 =cut
 
 sub new {
-    my ($class, $config) = @_;
+    my ($class, $config, %values) = @_;
 
     my $self = bless { }, $class;
 
@@ -67,15 +70,22 @@ sub new {
         close $fh;
     }
 
+    foreach (qw(user base repository port pidfile logs errrorlog accesslog quiet)) {
+        $self->{$_} = $values{$_} if defined $values{$_};
+    }
+    
     $self->{user}       ||= getlogin || getpwuid($<);
     $self->{base}       ||= cwd; # '/base/'.$self->{user};
     $self->{repository} ||= $self->{base}.'/repository';
     $self->{port}       ||= 6000;
     $self->{pidfile}    ||= $self->{base}.'/starman.pid';
+    $self->{errorlog}   ||= $self->{base}.'/logs/error.log'; 
+    $self->{accesslog}  ||= $self->{base}.'/logs/access.log';
 
+    # config file
     $self->{config} = $config;
 
-    # TODO: fail on invalid config values (e.g. port=0)
+    # TODO: validate config values
 
     $self;
 }
@@ -94,9 +104,9 @@ sub create {
     fail("Invalid module name: $module") 
         if $module and $module !~ /^([a-z][a-z0-9]*(::[a-z][a-z0-9]*)*)$/i;
 
-    $self->_provide_config;
+    $self->_provide_config('create');
 
-    $self->msg('in base directory '.$self->{base});
+    $self->msg('Using base directory '.$self->{base});
     chdir $self->{base};
 
     $self->msg('app/');
@@ -104,11 +114,11 @@ sub create {
 
     $self->msg('app/Makefile.PL');
     write_file('app/Makefile.PL',{no_clobber => 1},
-        read_file(dist_file('App-padadoy','Makefile.PL_')));
+        read_file(dist_file('App-padadoy','Makefile.PL')));
 
     if ( $module ) {
         $self->msg("app/app.psgi (calling $module)");
-        my $content = read_file(dist_file('App-padadoy','app2.psgi_'));
+        my $content = read_file(dist_file('App-padadoy','app2.psgi'));
         $content =~ s/YOUR_MODULE/$module/mg;
         write_file('app/app.psgi',{no_clobber => 1},$content);
 
@@ -120,7 +130,7 @@ sub create {
         make_path ($path);
 
         $self->msg("$path/$name.pm");
-        $content = read_file(dist_file('App-padadoy','Module.pm_'));
+        $content = read_file(dist_file('App-padadoy','Module.pm'));
         $content =~ s/YOUR_MODULE/$module/mg;
         write_file( "$path/$name.pm", {no_clobber => 1}, $content );
 
@@ -128,21 +138,21 @@ sub create {
         make_path('app/t');
 
         $self->msg('app/t/basic.t');
-        my $test = read_file(dist_file('App-padadoy','basic.t_'));
+        my $test = read_file(dist_file('App-padadoy','basic.t'));
         $test =~ s/YOUR_MODULE/$module/mg;
         write_file('app/t/basic.t',{no_clobber => 1},$test);
     } else {
         $self->msg('app/app.psgi');
         write_file('app/app.psgi',{no_clobber => 1},
-            read_file(dist_file('App-padadoy','app1.psgi_')));
+            read_file(dist_file('App-padadoy','app1.psgi')));
 
         $self->msg('app/lib/');
         mkdir 'app/lib';
-        write_file('app/lib/.gitkeep',{no_clobber => 1},'');
+        write_file('app/lib/.gitkeep',{no_clobber => 1},''); # TODO: required?
 
         $self->msg('app/t/');
         mkdir 'app/t';
-        write_file('app/t/.gitkeep',{no_clobber => 1},'');
+        write_file('app/t/.gitkeep',{no_clobber => 1},''); # TODO: required?
     }
 
     $self->msg('data/');
@@ -176,10 +186,11 @@ List dependencies (not implemented yet).
 sub deplist {
     my $self = shift;
 
-    eval "use Perl::PrereqScanner::App";
-    if ($@) {
-        fail "Perl::PrereqScanner::App required"
-    }
+    eval "use Perl::PrereqScanner";
+    fail "Perl::PrereqScanner required" if $@;
+
+    fail "not implemented yet";
+
     # TODO: dependencies should be detectable automatically
     # with Perl::PrereqScanner::App
 
@@ -201,12 +212,13 @@ sub init {
     fail 'Expected to run in an EMPTY base directory' 
         if grep { $_ ne $0 and $_ ne 'padadoy.conf' } <*>;
 
-    $self->_provide_config;
+    $self->_provide_config('init');
 
     try { 
-        run('git', 'init', '--bare', $self->{repository});
+        my $out = capture('git', 'init', '--bare', $self->{repository});
+        $self->msg(\'init',$_) for split "\n", $out;
     } catch {
-       fail 'Failed to init git repository in ' . $self->{repository};
+        fail 'Failed to init git repository in ' . $self->{repository};
     };
 
     my $file = $self->{repository}.'/hooks/update';
@@ -230,11 +242,14 @@ Show configuration values.
 =cut
 
 sub config {
+    say shift->_config;
+}
+
+sub _config {
     my $self = shift;
-    my $fh   = shift || *STDOUT;
-    foreach (sort keys %$self) {
-        say $fh "$_=" . $self->{$_};
-    }
+    my $max = max map { length } keys %$self;
+    join "\n", map { sprintf( "%-${max}s = %s", $_, $self->{$_} ) }
+        sort keys %$self;
 }
 
 =method restart
@@ -265,15 +280,32 @@ Start starman webserver with carton.
 sub start {
     my $self = shift;
 
+    fail "No configuration file found" unless $self->{config};
+
     chdir $self->{base}.'/app';
+
+if (0) { # FIXME
+    # check whether dependencies are satisfied
+    my @out = split "\n", capture('carton check --nocolor 2>&1');
+    if (@out > 1) { # carton check always seems to exit with zero (?!)
+        $out[0] = 
+        _msg( *STDERR, \'start', $_) for @out;
+        exit 1;
+    }
+}
+
     $self->msg("Starting starman as deamon on port %d (pid in %s)",
         $self->{port}, $self->{pidfile});
 
-    # TODO: we could better directly use Carton here
-    # I am not fully sure whether this is the right way to use carton
-
+    # TODO: refactor after release of carton 1.0
     $ENV{PLACK_ENV} = 'production';
-    run(qw(carton exec -Ilib -- starman --port),$self->{port},'-D','--pid',$self->{pidfile});
+    my @opt = (
+        'starman','--port' => $self->{port},
+        '-D','--pid'   => $self->{pidfile},
+        '--error-log'  => $self->{errorlog},
+        '--access-log' => $self->{accesslog},
+    );
+    run('carton','exec','-Ilib','--',@opt);
 }
 
 =method stop
@@ -352,15 +384,30 @@ sub status {
 }
 
 sub _provide_config {
-    my $self = shift;
+    my ($self, $caller) = @_;
     return if $self->{config};
 
     $self->{config} = cwd.'/padadoy.conf';
-    say "No configuration found - writing defaults to " . $self->{config} 
-        unless $self->{quiet};
-    open (my $fh,'>',$self->{config});
-    $self->config($fh);
-    close $fh;
+    $self->msg(\$caller,"Writing default configuration to ".$self->{config});
+    write_file( $self->{config}, $self->_config );
+}
+
+=head1 method cartontest
+
+Update dependencies with carton and run tests.
+
+=cut
+
+sub cartontest {
+    my $self = shift;
+
+    chdir $self->{base}.'/app';
+    $self->msg("installing dependencies and testing");
+
+    run('carton install');
+    run('perl Makefile.PL');
+    run('carton exec -Ilib -- make test');
+    run('carton exec -Ilib -- make clean > /dev/null');
 }
 
 1;
@@ -396,7 +443,6 @@ This structure can quickly be created with C<padadoy create> or C<padadoy
 create Your::App::Module>.  Files and directories marked by `(o)` are optional,
 depending on whether you also want to deploy at dotcloud and/or OpenShift.
 
-
 After some initalization, you can simply deploy new versions with `git push`.
 
 For each deployment machine you create a remote repository and initialize it:
@@ -412,18 +458,37 @@ I<This is an early preview release, be warned!>
 
 =head1 SYNOPSIS
 
-I<This needs some cleanup!>
+Create a new application and start it locally on your development machine:
 
-On your development machine
+  $ padadoy create Your::Module
+  $ plackup app/app.psgi
 
-  $ padadoy create Your::App::Module
+Start application locally as deamon with bundled dependencies
+
+  $ padadoy cartontest
+  $ padadoy start
+
+Show status of your running application and stop it
+  $ padadoy status
+  $ padadoy stop
+
+Deploy the application at dotCloud
+
+  $ dotcloud create nameoryourapp
+  $ dotcloud push nameofyourapp
+
+Collect your application files in a git repository
+
   $ git init
-  $ git add *
+  $ git add * logs/.gitignore
+  $ git add -f logs/.gitignore
   $ git commit -m "inial commit"
 
-On your deployment machine
+Prepare your deployment machine
 
   $ padadoy init
+
+Add your deployment machine as git remote and deploy
 
   $ git remote add ...
   $ git push prod master
@@ -461,13 +526,14 @@ L<https://docloud.com>.
 
 Create an OpenShift account, install the command line client, and create a domain,
 as documented at L<https://openshift.redhat.com/app/getting_started> (you may need
-to C<sudo apt-get install libopenssl-ruby> and find the client at 
-C</var/lib/gems/1.8/bin/rhc> to actually make use of it).
+to C<sudo apt-get install libopenssl-ruby>, and to find and fiddle around the client 
+at C</var/lib/gems/1.8/bin/rhc> to actually make use of it). Actually, I have not
+manage to deploy at OpenShift as seamless as at dotCloud.
 
 =head1 SEE ALSO
 
-There are many ways to deploy. See this presentation by TatsuhikoMiyagawa for
-an overview:
+There are many ways to deploy PSGI applications. See this presentation by 
+Tatsuhiko Miyagawa for an overview:
 
 L<http://www.slideshare.net/miyagawa/deploying-plack-web-applications-oscon-2011-8706659>
 
@@ -477,15 +543,9 @@ support more.
 This should also work on Amazon EC2 but I have not tested yet. See for instance
 L<http://www.deepakg.com/prog/2011/01/deploying-a-perl-dancer-application-on-amazon-ec2/>.
 
-In addition to your own server (with padadoy) and dotcloud, you might want to try out
-OpenShift: L<https://openshift.redhat.com/app/> (not tested yet).
-
 =head1 FAQ
 
-I<What does "padadoy" mean?> The funny name is derived from "PlAck DAncer
-DeplOYment" but it does not mean anything: the application is not limited 
-to Plack and Dancer.
+I<What does "padadoy" mean?> The funny name was derived from "PlAck DAncer
+DeplOYment" but it does not mean anything.
 
 =cut
-
-

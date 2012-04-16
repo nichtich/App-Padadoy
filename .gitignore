@@ -1,6 +1,7 @@
 *.swp
 *~
 
+.build/
 .carton/
 local/
 logs/
@@ -8,3 +9,5 @@ logs/
 MYMETA.*
 Makefile
 Makefile.old
+
+App-padadoy*

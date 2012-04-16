@@ -32,13 +32,16 @@ pod2usage(1) if $cmd eq 'help';
 ($config) = grep { -r $_ } map { "$_/padadoy.conf" } 
     ( cwd, '/home/' . (getlogin || getpwuid($<)) ) unless $config;
 
-my $padadoy = App::padadoy->new($config);
+my $regexp = qr{^([a-z]+)=(.*)$};
+my %values = map  { $_ =~ $regexp; $1 => $2 } 
+             grep { $_ =~ $regexp } @ARGV;
+my $padadoy = App::padadoy->new($config,%values);
 $padadoy->{quiet} = 1 if $quiet;
 
 pod2usage("Unknown command '$cmd'!")
     unless grep { $_ eq $cmd } @App::padadoy::commands;
 
-$padadoy->$cmd(@ARGV);
+$padadoy->$cmd( grep { $_ !~ $regexp } @ARGV);
 
 =head1 NAME
 
@@ -46,7 +49,7 @@ padadoy - Simply deploy PSGI applications
 
 =head1 SYNOPSIS
 
- padadoy [options] <command>
+ padadoy [options] <command> [config=value]
 
    Commands:
      init            initialize environment on deployment machine
@@ -57,6 +60,7 @@ padadoy - Simply deploy PSGI applications
      status          show some status information
      create          create a boilerplate application
      deplist         list applications package dependencies
+     cartontest      update dependencies (with carton) and run tests
 
    Options:
      -c|--config F   specify some configuration file F. By default first 
@@ -64,5 +68,10 @@ padadoy - Simply deploy PSGI applications
      -q|--quiet      suppress status messages
      -h|--help       show this help message and exit
      -v|--version    show version number of padadoy and exit
+
+   Configuration:
+     Configuration values are read from padadoy.conf. In addition you can
+     set config values as key=value pairs on the command line. See
+     command `config` for a list of config values.
 
 =cut

@@ -33,18 +33,13 @@ echo "[UPDATE] Checking out $GIT_DIR in $GIT_WORK_TREE"
 cd $GIT_WORK_TREE
 git checkout -q -f $newrev
 
-echo "[UPDATE] installing dependencies and testing"
-# TODO: Makefile.PL required - fail is missing!
+padadoy cartontest base=$GIT_WORK_TREE
+
 cd app
-pwd
-carton install
-perl Makefile.PL
-carton exec -Ilib -- make test
-carton exec -Ilib -- make clean
 
 export PLACK_ENV=production
 
-# TODO: test running with starman on testing port!!!
+# TODO: first test running with starman on testing port!!!
 
 echo "[UPDATE] new -> $GIT_WORK_TREE/app"
 cd

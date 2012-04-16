@@ -12,8 +12,8 @@ my $app = YOUR_MODULE->new;
 test_psgi $app, sub {
     my $cb = shift;
     my $res = $cb->(GET "/");
-    ok $res->content, "200", "Non-empty response at '/'"; 
-    is $res->status, "200", "HTTP status 200 at '/'";
+    ok $res->content, "Non-empty response at '/'"; 
+    is $res->code, "200", "HTTP status 200 at '/'";
 };
 
 done_testing;
