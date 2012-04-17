@@ -143,6 +143,11 @@ sub create {
         my $test = read_file(dist_file('App-padadoy','basic.t'));
         $test =~ s/YOUR_MODULE/$module/mg;
         write_file('app/t/basic.t',{no_clobber => 1},$test);
+
+        $content = read_file(dist_file('App-padadoy','index.pl.template'));
+		$self->msg("perl/index.pl");
+		make_path("perl");
+		write_file("perl/index.pl",{no_clobber = 1}, $content);
     } else {
         $self->msg('app/app.psgi');
         write_file('app/app.psgi',{no_clobber => 1},
@@ -439,7 +444,9 @@ Your application must be managed in a git repository with following structure:
 
     dotcloud.yml     - basic configuration for dotCloud (o)
     
-    libs -> app/lib                - symlink for OpenShift (o)
+    libs -> app/lib  - symlink for OpenShift (o)
+	perl/
+	   index.pl      - CGI script to run app.psgi for OpenShift (o)
     deplist.txt -> app/deplist.txt - symlink for OpenShift (o)
 
     .openshift/      - hooks for OpenShift (o)
@@ -532,11 +539,11 @@ L<https://docloud.com>.
 
 =head2 On OpenShift
 
-Create an OpenShift account, install the command line client, and create a domain,
-as documented at L<https://openshift.redhat.com/app/getting_started> (you may need
-to C<sudo apt-get install libopenssl-ruby>, and to find and fiddle around the client 
-at C</var/lib/gems/1.8/bin/rhc> to actually make use of it). Actually, I have not
-manage to deploy at OpenShift as seamless as at dotCloud.
+Create an OpenShift account, install the command line client, and create a
+domain, as documented at L<https://openshift.redhat.com/app/getting_started>
+(you may need to C<sudo apt-get install libopenssl-ruby>, and to find and
+fiddle around the client at C</var/lib/gems/1.8/bin/rhc> to actually make use
+of it). Att your OpenShift repository as remote and merge.
 
 =head1 SEE ALSO
 

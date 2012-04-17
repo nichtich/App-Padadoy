@@ -1,0 +1,9 @@
+#!/usr/bin/perl
+# Run ../app/app.psgi as CGI script
+
+use Plack::Loader;
+use File::Basename;
+my $psgi = join '/', dirname($0), '..', 'app', 'app.psgi';
+
+my $app = Plack::Util::load_psgi($psgi);
+Plack::Loader->auto->run($app);
