@@ -116,11 +116,11 @@ sub create {
 
     $self->msg('app/Makefile.PL');
     write_file('app/Makefile.PL',{no_clobber => 1},
-        read_file(dist_file('App-padadoy','Makefile.PL')));
+        read_file(dist_file('App-Padadoy','Makefile.PL')));
 
     if ( $module ) {
         $self->msg("app/app.psgi (calling $module)");
-        my $content = read_file(dist_file('App-padadoy','app2.psgi'));
+        my $content = read_file(dist_file('App-Padadoy','app2.psgi'));
         $content =~ s/YOUR_MODULE/$module/mg;
         write_file('app/app.psgi',{no_clobber => 1},$content);
 
@@ -132,7 +132,7 @@ sub create {
         make_path ($path);
 
         $self->msg("$path/$name.pm");
-        $content = read_file(dist_file('App-padadoy','Module.pm.template'));
+        $content = read_file(dist_file('App-Padadoy','Module.pm.tpl'));
         $content =~ s/YOUR_MODULE/$module/mg;
         write_file( "$path/$name.pm", {no_clobber => 1}, $content );
 
@@ -140,13 +140,13 @@ sub create {
         make_path('app/t');
 
         $self->msg('app/t/basic.t');
-        my $test = read_file(dist_file('App-padadoy','basic.t'));
+        my $test = read_file(dist_file('App-Padadoy','basic.t'));
         $test =~ s/YOUR_MODULE/$module/mg;
         write_file('app/t/basic.t',{no_clobber => 1},$test);
     } else {
         $self->msg('app/app.psgi');
         write_file('app/app.psgi',{no_clobber => 1},
-            read_file(dist_file('App-padadoy','app1.psgi')));
+            read_file(dist_file('App-Padadoy','app1.psgi')));
 
         $self->msg('app/lib/');
         mkdir 'app/lib';
@@ -164,12 +164,12 @@ sub create {
     write_file( 'dotcloud.yml',{no_clobber => 1},
          "www:\n  type: perl\n  approot: app" );
     
-    my $content = read_file(dist_file('App-padadoy','index.pl.template'));
+    my $content = read_file(dist_file('App-Padadoy','index.pl.tpl'));
     $self->msg("perl/index.pl");
     make_path("perl");
-    write_file("perl/index.pl",{no_clobber = 1}, $content);
+    write_file('perl/index.pl',{no_clobber => 1},$content);
 
-    my %symlinks = (libs => 'app/lib','deplist.txt' => 'app/deplist.txt');
+    my %symlinks = (libs => 'app/lib','app/deplist.txt' => 'deplist.txt');
     while (my ($from,$to) = each %symlinks) {
         $self->msg("$from -> $to");
         symlink $to, $from;
@@ -232,12 +232,12 @@ sub init {
 
     my $file = $self->{repository}.'/hooks/update';
     $self->msg("$file as executable");
-    write_file($file, read_file(dist_file('App-padadoy','update')));
+    write_file($file, read_file(dist_file('App-Padadoy','update')));
     chmod 0755,$file;
 
     $file = $self->{repository}.'/hooks/post-receive';
     $self->msg("$file as executable");
-    write_file($file, read_file(dist_file('App-padadoy','post-receive')));
+    write_file($file, read_file(dist_file('App-Padadoy','post-receive')));
     chmod 0755,$file;
 
     $self->msg("logs -> current/logs");
@@ -485,7 +485,8 @@ Your::App::Module>.
        lib/          - local perl modules (at least the actual application)
        t/            - unit tests
        Makefile.PL   - used to determine required modules and to run tests
-       deplist.txt   - a list of perl modules required to run (o)
+
+    deplist.txt      - a list of perl modules required to run (o)
       
     data/            - persistent data (o)
 

@@ -10,7 +10,8 @@ the following layout, inspired by the PaaS providers dotCloud and OpenShift:
        lib/          - local perl modules (at least the actual application)
        t/            - unit tests
        Makefile.PL   - used to determine required modules and to run tests
-       deplist.txt   - a list of perl modules required to run (o)
+
+    deplist.txt      - a list of perl modules required to run (o)
       
     data/            - persistent data (o)
 
@@ -34,7 +35,7 @@ After some initalization, you can simply deploy new versions with `git push`.
 
 In short, padadoy is just a layer on top of `git`, `Starman`, and `Carton`.
 
-The [documentation at CPAN](http://search.cpan.org/dist/App-padadoy/), as 
-generated from `lib/App/padadoy.pm` contains some details.
+The [documentation at CPAN](http://search.cpan.org/dist/App-Padadoy/), as 
+generated from `lib/App/Padadoy.pm` contains some details.
 
 Feel free to fork and submit patches and issues!

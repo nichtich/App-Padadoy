@@ -2,10 +2,9 @@
 use ExtUtils::MakeMaker;
 use autodie;
 
-# You should better add your dependencies in deplist.txt!
-
 my %deplist = ();
 
+# You should better add your dependencies in deplist.txt!
 if (-f 'deplist.txt') {
 	open my $fh, '<', 'deplist.txt';
     %deplist = map { 
