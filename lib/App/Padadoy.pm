@@ -464,14 +464,16 @@ Add your deployment machine as git remote and deploy:
 I<This is an early preview release, be warned! Design changes are likely,
 at least until a stable carton 1.0 has been released!>
 
-L<padadoy> is a simple script to facilitate deployment of L<Plack> and/or
-L<Dancer> applications, inspired by L<http://dotcloud.com>. It is based on
-L<Carton> module dependency manager, L<Starman> webserver, and git. In short,
-an application is managed in a git repository and pushed to a remote repository
-for deployment. At the remote server, required modules are installed and
-unit tests are run, to minimize the chance of a broken installation.
+L<Padadoy|padadoy> is a command line application to facilitate deployment of
+L<PSGI> applications, inspired by L<http://dotcloud.com>. Padadoy is based on
+the L<Carton> module dependency manager, L<Starman> webserver, and git. In
+short, an application is managed in a git repository and pushed to a remote
+repository for deployment. At the remote server, required modules are installed
+and unit tests are run, to minimize the chance of a broken installation.
 
-Your application is managed in a git repository with following structure:
+An application is managed in a git repository with following structure.  You
+can create it automatically with C<padadoy create> or C<padadoy create
+Your::App::Module>.  
 
     app/
        app.psgi      - application startup script
@@ -492,20 +494,11 @@ Your application is managed in a git repository with following structure:
 
     logs/            - logfiles (access and error)
      
-This structure can quickly be created with C<padadoy create> or C<padadoy
-create Your::App::Module>.  Files and directories marked by `(o)` are optional,
-depending on whether you also want to deploy at dotcloud and/or OpenShift.
+Files and directories marked by C<(o)> are optional, depending on whether you
+also want to deploy at dotcloud and/or OpenShift.
 
-After some initalization, you can simply deploy new versions with `git push`.
+To deploy your application, just do a C<git push> (after some initalization).
 
-For each deployment machine you create a remote repository and initialize it:
-
-  $ padadoy init
-
-You may then edit the file C<padadoy.conf> to adjust the port and other
-settings. Back on another machine you can simply push to the deployment
-repository with C<git push>. C<padadoy init> installs some hooks in the
-deployment repository so new code is first tested before activation.
 
 =head1 DEPLOYMENT
 
@@ -530,6 +523,16 @@ you need L<LWP::Protocol::https> that requires C<libnet-ssleay-perl> to build:
 
   $ sudo apt-get install libnet-ssleay-perl
   $ sudo cpanm LWP::Protocol::https
+
+For each deployment you create a remote repository and initialize it:
+
+  $ padadoy init
+
+You may then edit the file C<padadoy.conf> to adjust the port and other
+settings. Back on another machine you can simply push to the deployment
+repository with C<git push>. C<padadoy init> installs some hooks in the
+deployment repository so new code is first tested before activation.
+
 
 =head2 On dotCloud
 

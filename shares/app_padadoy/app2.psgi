@@ -1,6 +1,6 @@
 use File::Basename qw(dirname);
-use File::Spec;
-use lib File::Spec->catdir(dirname(__FILE__), 'lib');
+use File::Spec::Functions;
+use lib catdir(dirname($0), 'lib');
 
 use YOUR_MODULE;
 

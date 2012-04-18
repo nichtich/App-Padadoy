@@ -13,7 +13,7 @@ test_psgi $app, sub {
     my $cb = shift;
     my $res = $cb->(GET "/");
     ok $res->content, "Non-empty response at '/'"; 
-    is $res->code, "200", "HTTP status 200 at '/'";
+    like $res->code, qr{^[23]..$}, "HTTP status is 2xx or 3xx at '/'";
 };
 
 done_testing;
