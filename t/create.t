@@ -19,7 +19,7 @@ ok( -d catdir($devdir,$_), "$_/ created" )
     for qw(app data logs app/lib app/t app/lib/Foo libs);
 
 ok( -f catdir($devdir,$_), "$_ created" )
-    for qw(app/app.psgi app/lib/Foo/Bar.pm dotcloud.yml);
+    for qw(app/app.psgi app/lib/Foo/Bar.pm dotcloud.yml perl/index.pl);
 
 # TODO: deplist.txt is not checked
 

@@ -164,6 +164,11 @@ sub create {
     write_file( 'dotcloud.yml',{no_clobber => 1},
          "www:\n  type: perl\n  approot: app" );
     
+    my $content = read_file(dist_file('App-padadoy','index.pl.template'));
+    $self->msg("perl/index.pl");
+    make_path("perl");
+    write_file("perl/index.pl",{no_clobber = 1}, $content);
+
     my %symlinks = (libs => 'app/lib','deplist.txt' => 'app/deplist.txt');
     while (my ($from,$to) = each %symlinks) {
         $self->msg("$from -> $to");
@@ -488,9 +493,7 @@ Your::App::Module>.
     
     libs -> app/lib                - symlink for OpenShift (o)
     deplist.txt -> app/deplist.txt - symlink for OpenShift (o)
-
-    .openshift/      - hooks for OpenShift (o)
-       action_hooks/ - scripts that get run every git push (o)
+    perl/index.pl                  - CGI script for OpenShift (o)
 
     logs/            - logfiles (access and error)
      
@@ -498,7 +501,6 @@ Files and directories marked by C<(o)> are optional, depending on whether you
 also want to deploy at dotcloud and/or OpenShift.
 
 To deploy your application, just do a C<git push> (after some initalization).
-
 
 =head1 DEPLOYMENT
 
@@ -541,11 +543,11 @@ L<https://docloud.com>.
 
 =head2 On OpenShift
 
-Create an OpenShift account, install the command line client, and create a domain,
-as documented at L<https://openshift.redhat.com/app/getting_started> (you may need
-to C<sudo apt-get install libopenssl-ruby>, and to find and fiddle around the client 
-at C</var/lib/gems/1.8/bin/rhc> to actually make use of it). Actually, I have not
-manage to deploy at OpenShift as seamless as at dotCloud.
+Create an OpenShift account, install the command line client, and create a
+domain, as documented at L<https://openshift.redhat.com/app/getting_started>
+(you may need to C<sudo apt-get install libopenssl-ruby>, and to find and
+fiddle around the client at C</var/lib/gems/1.8/bin/rhc> to actually make use
+of it). Att your OpenShift repository as remote and merge.
 
 =head1 SEE ALSO
 

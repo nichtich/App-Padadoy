@@ -16,7 +16,9 @@ the following layout, inspired by the PaaS providers dotCloud and OpenShift:
 
     dotcloud.yml     - basic configuration for dotCloud (o)
     
-    libs -> app/lib                - symlink for OpenShift (o)
+    libs -> app/lib  - symlink for OpenShift (o)
+	perl/
+	   index.pl      - CGI script to run app.psgi for OpenShift (o)
     deplist.txt -> app/deplist.txt - symlink for OpenShift (o)
 
     .openshift/      - hooks for OpenShift (o)
