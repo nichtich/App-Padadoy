@@ -10,16 +10,19 @@ use App::Padadoy;
 my ($cwd) = (cwd =~ /^(.*)$/g); # untainted cwd
 
 my $devdir = tempdir( CLEANUP => 1 );
+diag "creating Foo::Bar app in $devdir";
 chdir $devdir;
 
 my $padadoy = App::Padadoy->new('', quiet => 1);
 $padadoy->create('Foo::Bar');
 
-ok( -d catdir($devdir,$_), "$_/ created" )
-    for qw(app data logs app/lib app/t app/lib/Foo libs);
+foreach my $dir (qw(app data logs app/lib app/t app/lib/Foo libs)) {
+    ok( -d catdir($devdir,$dir), "$dir/ created" )
+}
 
-ok( -f catdir($devdir,$_), "$_ created" )
-    for qw(app/app.psgi app/lib/Foo/Bar.pm dotcloud.yml perl/index.pl);
+foreach my $file (qw(app/app.psgi app/lib/Foo/Bar.pm dotcloud.yml perl/index.pl)) {
+    ok( -f catdir($devdir,$file), "$file created" )
+}
 
 # TODO: deplist.txt is not checked
 
