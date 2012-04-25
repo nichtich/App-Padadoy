@@ -1,9 +1,11 @@
 **padadoy** is a simple command line application to deploy PSGI applications.
+In short, padadoy is just a layer on top of `git`, `Starman`, and `Carton`.
 
 *This is an early preview - be warned!*
 
 Your application must be managed in a git repository that should conform to 
-the following layout, inspired by the PaaS providers dotCloud and OpenShift:
+the following layout, inspired by the PaaS providers dotCloud and OpenShift.
+You can create a boilerplate with `padadoy create`.
 
     app/
        app.psgi      - application startup script
@@ -25,17 +27,22 @@ the following layout, inspired by the PaaS providers dotCloud and OpenShift:
     .openshift/      - hooks for OpenShift (o)
        action_hooks/ - scripts that get run every git push (o)
 
-    logs/            - logfiles (access and error)
-     
-Files and directories marked by `(o)` are optional, depending on what platform
-you want to deploy. Actually you do not need padadoy if you only deploy to
-dotCloud and/or OpenShift (just use their command line clients). But if you
-also want to deploy at your own server, padadoy may facilitate some steps.
-After some initalization, you can simply deploy new versions with `git push`.
+This directory layout helps to easy deploy on multiple platforms. Files and 
+directories marked by `(o)` are optional, depending on what platform you want
+to deploy. Padadoy also facilitates deploying to your own servers just like
+a PaaS provider.
 
-In short, padadoy is just a layer on top of `git`, `Starman`, and `Carton`.
+On the deployment machine there is a directory with the following structure:
+
+    repository/      - the bare git repository that the app is pushed to
+    current -> ...   - symbolic link to the current working directory
+    new -> ...       - symbolic link to the new working directory on updates
+    padadoy.conf     - local configuration
+
+You can create this layout with `padadoy remote init`. After adding the remote
+repository as git remote, you can simply deploy new versions with `git push`.
 
 The [documentation at CPAN](http://search.cpan.org/dist/App-Padadoy/), as 
-generated from `lib/App/Padadoy.pm` contains some details.
+generated from `lib/App/Padadoy.pm` contains more details.
 
 Feel free to fork and submit patches and issues!

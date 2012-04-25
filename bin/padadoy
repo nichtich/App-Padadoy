@@ -1,13 +1,14 @@
 #!/usr/bin/perl
 use strict;
 use warnings;
-#ABSTRACT: Simply deploy PSGI applications
+#ABSTRACT: Padadoy command line client to simply deploy PSGI applications
 #PODNAME: padadoy
 
 use 5.010;
 use App::Padadoy;
 
 use Getopt::Long;
+use File::Spec::Functions;
 use Pod::Usage;
 use Cwd;
 
@@ -20,25 +21,26 @@ GetOptions(
 ) or pod2usage(2);
 pod2usage(1) if $help;
 
-if ($version) {
-    say 'This is padadoy version '.($App::Padadoy::VERSION || '??').
-        '. Use -h for help.';
-    exit;
-}
+$ARGV[0] = 'version' if $version;
 
 pod2usage('Please specify a command!') unless @ARGV; 
 
 my $cmd = shift @ARGV;
 pod2usage(1) if $cmd eq 'help';
 
-($config) = grep { -r $_ } map { "$_/padadoy.conf" } 
-    ( cwd, '/home/' . (getlogin || getpwuid($<)) ) unless $config;
+# Look for ./padadoy.conf or ~/padadoy.conf
+($config) = grep { -r $_ } map { catfile($_,'padadoy.conf') }
+    ( cwd, catdir('/home',(getlogin || getpwuid($<))) ) unless $config;
 
+# Parse config values
 my $regexp = qr{^([a-z]+)=(.*)$};
 my %values = map  { $_ =~ $regexp; $1 => $2 } 
              grep { $_ =~ $regexp } @ARGV;
-pod2usage("Unknown config value $_")
-    for grep { !$App::Padadoy::configs } keys %values;
+foreach my $key (keys %values) {
+    pod2usage("Unknown config value $_") unless 
+        grep { $key eq $_ } @App::Padadoy::configs;
+}
+
 my $padadoy = App::Padadoy->new($config,%values);
 $padadoy->{quiet} = 1 if $quiet;
 
@@ -47,9 +49,6 @@ pod2usage("Unknown command '$cmd'!")
 
 $padadoy->$cmd( grep { $_ !~ $regexp } @ARGV);
 
-=head1 NAME
-
-padadoy - Simply deploy PSGI applications
 
 =head1 SYNOPSIS
 
@@ -64,7 +63,10 @@ padadoy - Simply deploy PSGI applications
      status          show some status information
      create          create a boilerplate application
      deplist         list applications package dependencies
+     checkout [R]    check out the application to a new directory (R=revision)
      cartontest      update dependencies (with carton) and run tests
+     version         show version number of padadoy and exit
+     remote CMD      run padadoy with some command on the remote machine
 
    Options:
      -c|--config F   specify some configuration file F. By default first 
@@ -75,7 +77,7 @@ padadoy - Simply deploy PSGI applications
 
    Configuration:
      Configuration values are read from padadoy.conf. In addition you can
-     set config values as key=value pairs on the command line. See
+     set config values as key=value pairs on the command line. See the
      command `config` for a list of config values.
 
 =cut

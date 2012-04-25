@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# TODO: put this in padadoy
-
 refname="$1" 
 oldrev="$2" 
 newrev="$3" 
@@ -15,38 +13,25 @@ fi
 # Any command that fails will cause the entire script to fail
 set -e
 
-export GIT_WORK_TREE=~/$newrev
-export GIT_DIR=~/repository
-
-cd
-[ -d $GIT_WORK_TREE ] && echo "work tree $GIT_WORK_TREE already exists!" && exit 1
-
-# reuse existing working tree for faster updates
-# TODO: build from scratch if somehow required to do so!
-if [ -d current ]; then
-    rsync -a current/ $GIT_WORK_TREE
-else
-    mkdir $GIT_WORK_TREE
+# FIXME: right now, it only works for home directory
+base=~/
+newdir=$base$newrev
+curdir=${base}current
+if [ ! -d $curdir ]; then
+  curdir=
 fi
 
-echo "[UPDATE] Checking out $GIT_DIR in $GIT_WORK_TREE"
-cd $GIT_WORK_TREE
-git checkout -q -f $newrev
+cd $base
+padadoy checkout $newrev $newdir $curdir
 
-padadoy cartontest base=$GIT_WORK_TREE
+# TODO: support remote testing on another port
+padadoy cartontest base=$newdir
 
-cd app
+echo "[UPDATE] new -> $newdir/app"
 
-export PLACK_ENV=production
-
-# TODO: first test running with starman on testing port!!!
-
-echo "[UPDATE] new -> $GIT_WORK_TREE/app"
-cd
+cd $base
 rm -f new
-ln -s $GIT_WORK_TREE new
+ln -s $newrev new
 
-echo "[UPDATE] revision $GIT_WORK_TREE installed at ~/new"
-
-
+echo "[UPDATE] revision $refname installed at ~/new"
 

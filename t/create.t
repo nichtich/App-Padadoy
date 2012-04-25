@@ -16,13 +16,15 @@ chdir $devdir;
 my $padadoy = App::Padadoy->new('', quiet => 1);
 $padadoy->create('Foo::Bar');
 
-foreach my $dir (qw(app data logs app/lib app/t app/lib/Foo libs)) {
+foreach my $dir (qw(app data app/lib app/t app/lib/Foo libs)) {
     ok( -d catdir($devdir,$dir), "$dir/ created" )
 }
 
 foreach my $file (qw(app/app.psgi app/lib/Foo/Bar.pm dotcloud.yml perl/index.pl)) {
     ok( -f catdir($devdir,$file), "$file created" )
 }
+
+#$padadoy->checkout
 
 # TODO: deplist.txt is not checked
 

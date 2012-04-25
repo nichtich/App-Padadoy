@@ -21,4 +21,4 @@ BASE=`pwd`/current
 padadoy stop base=$BASE
 padadoy start base=$BASE
 
-# TODO: cleanup old revisions
+# TODO: cleanup old revisions?
