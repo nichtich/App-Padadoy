@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 use strict;
 use warnings;
-#ABSTRACT: Padadoy command line client to simply deploy PSGI applications
+#ABSTRACT: Command line client to simply deploy PSGI applications
 #PODNAME: padadoy
 
 use 5.010;
@@ -9,6 +9,7 @@ use App::Padadoy;
 
 use Getopt::Long;
 use File::Spec::Functions;
+use File::Basename;
 use Pod::Usage;
 use Cwd;
 
@@ -28,9 +29,21 @@ pod2usage('Please specify a command!') unless @ARGV;
 my $cmd = shift @ARGV;
 pod2usage(1) if $cmd eq 'help';
 
-# Look for ./padadoy.conf or ~/padadoy.conf
-($config) = grep { -r $_ } map { catfile($_,'padadoy.conf') }
-    ( cwd, catdir('/home',(getlogin || getpwuid($<))) ) unless $config;
+# TODO: There should be a CPAN module to do this:
+sub find_config {
+    my $path = cwd;
+    while ($path) {
+        my $file = catfile($path,'padadoy.conf');
+        return $file if -e $file;
+        last if $path eq dirname($path);
+        $path = dirname($path);
+    }
+    my ($login) = getpwuid($<);
+    my $file = catdir('/home',$login,'padadoy.conf');
+    return -e $file ? $file : '';
+}
+
+$config //= find_config;
 
 # Parse config values
 my $regexp = qr{^([a-z]+)=(.*)$};
@@ -55,7 +68,6 @@ $padadoy->$cmd( grep { $_ !~ $regexp } @ARGV);
  padadoy [options] <command> [config=value]
 
    Commands:
-     init            initialize environment on deployment machine
      start           start the application
      stop            stop the application
      restart         start or gracefully restart the application if running
@@ -68,8 +80,13 @@ $padadoy->$cmd( grep { $_ !~ $regexp } @ARGV);
      version         show version number of padadoy and exit
      remote CMD      run padadoy with some command on the remote machine
 
+     init            initialize environment on deployment machine
+     update          check out a new revision and test it
+     enable          enable prepared application and (re)start
+
    Options:
-     -c|--config F   specify some configuration file F. By default first 
+     -c|--config F   specify some configuration file F. By default padadoy.conf
+                     is looked for in ./, ../, ../../ etc. and in ~/.
                      ./padadoy.conf and then ~/padadoy.conf is used.
      -q|--quiet      suppress status messages
      -h|--help       show this help message and exit

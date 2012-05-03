@@ -10,28 +10,4 @@ if [ -z "$refname" -o -z "$oldrev" -o -z "$newrev" ]; then
     exit 1 
 fi 
 
-# Any command that fails will cause the entire script to fail
-set -e
-
-# FIXME: right now, it only works for home directory
-base=~/
-newdir=$base$newrev
-curdir=${base}current
-if [ ! -d $curdir ]; then
-  curdir=
-fi
-
-cd $base
-padadoy checkout $newrev $newdir $curdir
-
-# TODO: support remote testing on another port
-padadoy cartontest base=$newdir
-
-echo "[UPDATE] new -> $newdir/app"
-
-cd $base
-rm -f new
-ln -s $newrev new
-
-echo "[UPDATE] revision $refname installed at ~/new"
-
+padadoy update $newrev
