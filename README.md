@@ -27,17 +27,17 @@ You can create a boilerplate with `padadoy create`.
     .openshift/      - hooks for OpenShift (o)
        action_hooks/ - scripts that get run every git push (o)
 
-This directory layout helps to easy deploy on multiple platforms. Files and 
+This directory layout helps to easy deploy on multiple platforms. Files and
 directories marked by `(o)` are optional, depending on what platform you want
-to deploy. Padadoy also facilitates deploying to your own servers just like
-a PaaS provider.
+to deploy to. 
 
+Padadoy facilitates deploying to your own servers just like a PaaS provider.
 On the deployment machine there is a directory with the following structure:
 
     repository/      - the bare git repository that the app is pushed to
     current -> ...   - symbolic link to the current working directory
     new -> ...       - symbolic link to the new working directory on updates
-    padadoy.conf     - local configuration
+    padadoy.yml      - local configuration
 
 You can create this layout with `padadoy remote init`. After adding the remote
 repository as git remote, you can simply deploy new versions with `git push`.

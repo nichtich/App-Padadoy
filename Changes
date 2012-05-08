@@ -1,4 +1,6 @@
 {{$NEXT}}
+    Moved git hooks to Perl module
+    Use YAML for config files
 
 0.122     2012-04-16
     Renamed to App::Padadoy

@@ -15,6 +15,7 @@ use File::Basename qw(dirname);
 use File::Spec::Functions qw(catdir catfile rel2abs);
 use Git::Repository;
 use Sys::Hostname;
+use YAML::Any qw(LoadFile Dump);
 use Cwd;
 
 # required for deployment
@@ -26,9 +27,9 @@ use Plack::Test qw();
 use HTTP::Request::Common qw();
 
 our @commands = qw(init start stop restart config status create checkout
-        deplist cartontest remote version update enable);
-our @configs = qw(user base repository port pidfile logs errrorlog accesslog
-        quiet remote);
+        deplist cartontest remote version update enable logs);
+our @remote_commands = qw(init start stop restart config status version); # TODO: create deplist checkout cartontest
+our @configs = qw(user base repository port pidfile quiet remote);
 
 # _msg( $fh, [\$caller], $msg [@args] )
 sub _msg (@) { 
@@ -52,7 +53,7 @@ sub msg {
 
 =method new ( [$configfile] [%configvalues] )
 
-Start padadoy, optionally with some configuration (C<padadoy.conf>).
+Start padadoy, optionally with some configuration (C<padadoy.yml>).
 
 =cut
 
@@ -60,34 +61,29 @@ sub new {
     my ($class, $config, %values) = @_;
 
     my $self = bless { }, $class;
+    my $yaml = { };
 
     if ($config) {
         # $self->msg("Reading configuration from $config");
-        open (my $fh, "<", $config);
-        while(<$fh>) {
-            next if /^\s*$/;
-            if (/^\s*([a-z]+)\s*[:=]\s*(.*?)\s*$/) {
-                $self->{$1} = ($2 // '');         
-            } elsif ($_ !~ /^\s*#/) {
-                fail "syntax error in config file: $_";
-            }
-        }
-        close $fh;
+        try {
+            $yaml = LoadFile( $config );
+        } catch {
+            fail $_;
+        };
         $self->{base} = rel2abs(dirname($config));
+    } else {
+        $self->{base} = $values{base} // cwd;
     }
 
     foreach (@configs) {
-        $self->{$_} = $values{$_} if defined $values{$_};
+        $yaml->{$_} = $values{$_} if defined $values{$_};
     }
 
-    $self->{user}       ||= getlogin || getpwuid($<);
-    $self->{base}       ||= cwd; # '/base/'.$self->{user};
-    $self->{repository} ||= catdir($self->{base},'repository');
-    $self->{port}       ||= 6000;
-    $self->{pidfile}    ||= catfile($self->{base},'starman.pid');
-    $self->{logs}       ||= catdir( $self->{base},'logs');
-    $self->{errorlog}   ||= catfile($self->{logs},'error.log');
-    $self->{accesslog}  ||= catfile($self->{logs},'access.log');
+    $self->{user}       = $yaml->{user} || getlogin || getpwuid($<);
+    $self->{repository} = $yaml->{repository} || catdir($self->{base},'repository');
+    $self->{port}       = $yaml->{port} || 6000;
+    $self->{pidfile}    = $yaml->{pidfile} || catfile($self->{base},'starman.pid');
+    $self->{remote}     = $yaml->{remote};
 
     # config file
     $self->{config} = $config;
@@ -221,7 +217,7 @@ sub init {
     fail "Expected to run in ".$self->{base} 
         unless cwd eq $self->{base};
     fail 'Expected to run in an EMPTY base directory' 
-        if grep { $_ ne $0 and $_ ne 'padadoy.conf' } <*>;
+        if grep { $_ ne $0 and $_ ne 'padadoy.yml' } <*>;
 
     $self->_provide_config('init');
 
@@ -264,9 +260,7 @@ sub config {
 
 sub _config {
     my $self = shift;
-    my $max = max map { length } keys %$self;
-    join "\n", map { sprintf( "%-${max}s = %s", $_, $self->{$_} // '' ) }
-        sort keys %$self;
+    Dump( { map { $_ => $self->{$_} // '' } @configs } );
 }
 
 =method restart
@@ -313,13 +307,13 @@ if (0) { # FIXME
 }
 
     # make sure log files exist
-    foreach my $log (qw(errorlog accesslog)) {
-        my $path = dirname($self->{$log});
-        make_path($path) unless -d $path;
-        if (! -e $self->{$log} ) {
-            open (my $fh, '>>', $self->{$log}); 
-            close $fh;
-        }
+    my $logs = catdir($self->{base},'logs');
+    make_path($logs) unless -d $logs;
+
+    foreach ( grep { ! -e $_ } 
+              map { catfile($logs,$_) } qw(error.log access.log) ) {
+        open (my $fh, '>>', $_); 
+        close $fh;
     }
 
     $self->msg("Starting starman as deamon on port %d (pid in %s)",
@@ -330,8 +324,8 @@ if (0) { # FIXME
     my @opt = (
         'starman','--port' => $self->{port},
         '-D','--pid'   => $self->{pidfile},
-        '--error-log'  => $self->{errorlog},
-        '--access-log' => $self->{accesslog},
+        '--error-log'  => catfile($logs,'error.log'),
+        '--access-log' => catfile($logs,'access.log'),
     );
     run('carton','exec','-Ilib','--',@opt);
 }
@@ -400,7 +394,7 @@ sub status {
     }
 
     if ($sock or $pid2) {
-        if ($pid and $pid eq $pid2) {
+        if ($pid and $pid2 and $pid eq $pid2) {
             $self->msg("Port $port is used by process $pid as given in ".$self->{pidfile});
         } elsif (!$pid and $user and $user eq $self->{user}) {
             $self->msg("Looks like " . $self->{pidfile} . " is missing (should contain PID $pid2) ".
@@ -415,7 +409,7 @@ sub _provide_config {
     my ($self, $caller) = @_;
     return if $self->{config};
 
-    $self->{config} = cwd.'/padadoy.conf';
+    $self->{config} = cwd.'/padadoy.yml';
     $self->msg(\$caller,"Writing default configuration to ".$self->{config});
     # TODO: better use template with comments instead
     write_file( $self->{config}, $self->_config );
@@ -559,8 +553,7 @@ sub remote {
     fail 'missing remote command' unless $command;
 
     fail "command $command not supported on remote"
-        unless grep { $_ eq $command } qw(init start stop restart config status version); 
-        # TODO: create deplist checkout cartontest
+        unless grep { $_ eq $command } @remote_commands;
     
     $self->{remote} =~ /^(.+):(.+)$/ or fail 'invalid remote value: '.$self->{remote};
     my ($userhost,$dir) = ($1,$2);
@@ -569,6 +562,18 @@ sub remote {
     $self->msg("running padadoy on ".$self->{remote});
 
     run('ssh',$userhost,"cd $dir && padadoy $command ".join ' ', @_);
+}
+
+=method logs
+
+Consult logfiles.
+
+=cut
+
+sub logs {
+    my $self = shift;
+    my $logs = catdir($self->{base},'logs');
+    run('tail','-F', map { catfile($logs,$_) } qw(error.log access.log));
 }
 
 =method version
@@ -611,7 +616,7 @@ Deploy the application at dotCloud
   $ dotcloud create nameoryourapp
   $ dotcloud push nameofyourapp
 
-Prepare your own deployment machine (as C<remote> in C<padadoy.conf>):
+Prepare your own deployment machine (as C<remote> in C<padadoy.yml>):
 
   $ padadoy remote init
 
@@ -662,7 +667,7 @@ On the deployment machine there is a directory with the following structure:
     repository/      - the bare git repository that the app is pushed to
     current -> ...   - symbolic link to the current working directory
     new -> ...       - symbolic link to the new working directory on updates
-    padadoy.conf     - local configuration
+    padadoy.yml      - local configuration
 
 You can create this layout with C<padadoy remote init>. After adding the remote
 repository as git remote, you can simply deploy new versions with C<git push>.
@@ -695,10 +700,13 @@ For each deployment you create a remote repository and initialize it:
 
   $ padadoy init
 
-You may then edit the file C<padadoy.conf> to adjust the port and other
+You may then edit the file C<padadoy.yml> to adjust the port and other
 settings. Back on another machine you can simply push to the deployment
 repository with C<git push>. C<padadoy init> installs some hooks in the
 deployment repository so new code is first tested before activation.
+ 
+In most cases, you will run your application begind a reverse proxy, so you
+should include L<Plack::Middleware::XForwardedFor> to get real remote IPs.
 
 =head2 On dotCloud
 

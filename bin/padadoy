@@ -11,6 +11,7 @@ use Getopt::Long;
 use File::Spec::Functions;
 use File::Basename;
 use Pod::Usage;
+use YAML::Any qw(LoadFile);
 use Cwd;
 
 my ($help,$version,$config,$quiet);
@@ -33,34 +34,38 @@ pod2usage(1) if $cmd eq 'help';
 sub find_config {
     my $path = cwd;
     while ($path) {
-        my $file = catfile($path,'padadoy.conf');
+        my $file = catfile($path,'padadoy.yml');
         return $file if -e $file;
         last if $path eq dirname($path);
         $path = dirname($path);
     }
     my ($login) = getpwuid($<);
-    my $file = catdir('/home',$login,'padadoy.conf');
+    my $file = catdir('/home',$login,'padadoy.yml');
     return -e $file ? $file : '';
 }
 
 $config //= find_config;
 
-# Parse config values
+# Parse config file and values
+my $values = $config ne '' ? LoadFile( $config ) : { };
 my $regexp = qr{^([a-z]+)=(.*)$};
-my %values = map  { $_ =~ $regexp; $1 => $2 } 
-             grep { $_ =~ $regexp } @ARGV;
-foreach my $key (keys %values) {
+foreach (@ARGV) {
+    next unless $_ =~ $regexp;
+    $values->{$1} = $2;
+}
+
+foreach my $key (keys %$values) {
     pod2usage("Unknown config value $_") unless 
         grep { $key eq $_ } @App::Padadoy::configs;
 }
 
-my $padadoy = App::Padadoy->new($config,%values);
+my $padadoy = App::Padadoy->new($config,%$values);
 $padadoy->{quiet} = 1 if $quiet;
 
 pod2usage("Unknown command '$cmd'!")
     unless grep { $_ eq $cmd } @App::Padadoy::commands;
 
-$padadoy->$cmd( grep { $_ !~ $regexp } @ARGV);
+$padadoy->$cmd( grep { $_ !~ $regexp } @ARGV );
 
 
 =head1 SYNOPSIS
@@ -78,6 +83,7 @@ $padadoy->$cmd( grep { $_ !~ $regexp } @ARGV);
      checkout [R]    check out the application to a new directory (R=revision)
      cartontest      update dependencies (with carton) and run tests
      version         show version number of padadoy and exit
+     logs            consult logfiles
      remote CMD      run padadoy with some command on the remote machine
 
      init            initialize environment on deployment machine
@@ -85,15 +91,15 @@ $padadoy->$cmd( grep { $_ !~ $regexp } @ARGV);
      enable          enable prepared application and (re)start
 
    Options:
-     -c|--config F   specify some configuration file F. By default padadoy.conf
+     -c|--config F   specify some configuration file F. By default padadoy.yml
                      is looked for in ./, ../, ../../ etc. and in ~/.
-                     ./padadoy.conf and then ~/padadoy.conf is used.
+                     ./padadoy.yml and then ~/padadoy.yml is used.
      -q|--quiet      suppress status messages
      -h|--help       show this help message and exit
      -v|--version    show version number of padadoy and exit
 
    Configuration:
-     Configuration values are read from padadoy.conf. In addition you can
+     Configuration values are read from padadoy.yml. In addition you can
      set config values as key=value pairs on the command line. See the
      command `config` for a list of config values.
 
