@@ -6,13 +6,11 @@ use warnings;
 
 use 5.010;
 use App::Padadoy;
-
 use Getopt::Long;
-use File::Spec::Functions;
-use File::Basename;
+use Path::Class qw(file dir);
+use File::HomeDir;
 use Pod::Usage;
 use YAML::Any qw(LoadFile);
-use Cwd;
 
 my ($help,$version,$config,$quiet);
 GetOptions(
@@ -31,23 +29,23 @@ my $cmd = shift @ARGV;
 pod2usage(1) if $cmd eq 'help';
 
 # TODO: There should be a CPAN module to do this:
-sub find_config {
-    my $path = cwd;
+sub find_config_file {
+    my $filename = shift;;
+    my $path = dir('.')->absolute;
     while ($path) {
-        my $file = catfile($path,'padadoy.yml');
+        my $file = file($path,$filename);
         return $file if -e $file;
-        last if $path eq dirname($path);
-        $path = dirname($path);
+        last if $path eq $path->parent; # stop at root
+        $path = $path->parent;
     }
-    my ($login) = getpwuid($<);
-    my $file = catdir('/home',$login,'padadoy.yml');
-    return -e $file ? $file : '';
+    my $file = file(File::HomeDir->my_home,$filename);
+    return -e $file ? $file : undef;
 }
 
-$config //= find_config;
+$config //= find_config_file('padadoy.yml');
 
 # Parse config file and values
-my $values = $config ne '' ? LoadFile( $config ) : { };
+my $values = defined $config ? LoadFile( $config ) : { };
 my $regexp = qr{^([a-z]+)=(.*)$};
 foreach (@ARGV) {
     next unless $_ =~ $regexp;
