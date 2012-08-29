@@ -1,5 +1,4 @@
-#!/usr/bin/perl
-
+use 5.10.0;
 use Test::More;
 use File::Temp qw(tempdir);
 use File::Spec::Functions;
@@ -31,4 +30,5 @@ foreach my $file (qw(app/app.psgi app/lib/Foo/Bar.pm dotcloud.yml perl/index.pl)
 # TODO: test newly created application
 
 chdir $cwd; # be back before cleanup
+
 done_testing;

@@ -9,6 +9,8 @@ use Try::Tiny;
 use IPC::System::Simple qw(run capture $EXITVAL);
 use File::Slurp;
 use List::Util qw(max);
+use File::HomeDir; # required by CLI
+use Path::Class;   # required by CLI
 use File::ShareDir qw(dist_file);
 use File::Path qw(make_path);
 use File::Basename qw(dirname);
@@ -28,7 +30,9 @@ use HTTP::Request::Common qw();
 
 our @commands = qw(init start stop restart config status create checkout
         deplist cartontest remote version update enable logs);
-our @remote_commands = qw(init start stop restart config status version); # TODO: create deplist checkout cartontest
+our @remote_commands = qw(init start stop restart config status version
+    logs); 
+    # TODO: create deplist checkout cartontest
 our @configs = qw(user base repository port pidfile quiet remote);
 
 # _msg( $fh, [\$caller], $msg [@args] )
@@ -310,8 +314,7 @@ if (0) { # FIXME
     my $logs = catdir($self->{base},'logs');
     make_path($logs) unless -d $logs;
 
-    foreach ( grep { ! -e $_ } 
-              map { catfile($logs,$_) } qw(error.log access.log) ) {
+    foreach ( grep { ! -e $_ } $self->logfiles ) { 
         open (my $fh, '>>', $_); 
         close $fh;
     }
@@ -572,10 +575,12 @@ Consult logfiles.
 
 sub logs {
     my $self = shift;
-    my $logs = catdir($self->{base},'logs');
-    run('tail','-F', map { catfile($logs,$_) } qw(error.log access.log));
+    my @logfiles = grep { 
+        -e $_ ? 1 : do { $self->msg("missing logfile $_"); 0 }
+    } $self->logfiles;
+    run('tail','-F', @logfiles) if @logfiles;
 }
-
+    
 =method version
 
 Show version number and exit.
@@ -585,6 +590,18 @@ Show version number and exit.
 sub version {
     say 'This is padadoy version '.($App::Padadoy::VERSION || '??');
     exit;
+}
+
+=method logfiles
+
+Get a list of logfiles.
+
+=cut
+
+sub logfiles {
+    my $self = shift;
+    my $logdir = catdir($self->{base},'logs');
+    return map { catfile($logdir,$_) } qw(error.log access.log);
 }
 
 1;
