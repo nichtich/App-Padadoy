@@ -87,17 +87,33 @@ sub new {
     $self->{repository} = $yaml->{repository} || catdir($self->{base},'repository');
     $self->{port}       = $yaml->{port} || 6000;
     $self->{pidfile}    = $yaml->{pidfile} || catfile($self->{base},'starman.pid');
-    $self->{remote}     = $yaml->{remote};
+
+    $self->{remote}     = $yaml->{remote} || 'prod';
+    $self->{remote} = _git_remote($self->{remote}) 
+        // fail "remote not found: " . $self->{remote};
 
     # config file
     $self->{config} = $config;
 
     # TODO: validate config values
 
-    fail "Invalid remote value: ".$self->{remote} 
-        if $self->{remote} and $self->{remote} !~ qr{^[^@]+@[^:]+:[~/].*$};
-
     $self;
+}
+
+# get an existing remote by URL or by name
+sub _git_remote {
+    my $remote = shift;
+    my $git = Git::Repository->new( work_tree => '.' );
+    my $cmd = $git->command( remote => '-v' );
+
+    foreach ( $cmd->stdout->getlines() ) {
+        my ($name,$url,$method) = split /\s+/;
+        next unless $method eq '(push)';
+        $remote = $url if $remote eq $name;
+        return $remote if $remote eq $url;
+    }
+
+    return undef;
 }
 
 =method create
