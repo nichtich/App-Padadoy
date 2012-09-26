@@ -1,9 +1,10 @@
-use strict;
-use warnings;
 package App::Padadoy;
 #ABSTRACT: Simply deploy PSGI applications
 
-use 5.010;
+use strict;
+use warnings;
+use v5.10;
+
 use autodie;
 use Try::Tiny;
 use IPC::System::Simple qw(run capture $EXITVAL);
@@ -14,6 +15,7 @@ use Path::Class;   # required by CLI
 use File::ShareDir qw(dist_file);
 use File::Path qw(make_path);
 use File::Basename qw(dirname);
+use File::Copy;
 use File::Spec::Functions qw(catdir catfile rel2abs);
 use Git::Repository;
 use Sys::Hostname;
@@ -88,9 +90,8 @@ sub new {
     $self->{port}       = $yaml->{port} || 6000;
     $self->{pidfile}    = $yaml->{pidfile} || catfile($self->{base},'starman.pid');
 
-    $self->{remote}     = $yaml->{remote} || 'prod';
-    $self->{remote} = _git_remote($self->{remote}) 
-        // fail "remote not found: " . $self->{remote};
+    $self->{remote}     = _git_remote( $yaml->{remote} || 'prod' ); 
+#        // fail "remote not found: " . $self->{remote};
 
     # config file
     $self->{config} = $config;
@@ -103,7 +104,7 @@ sub new {
 # get an existing remote by URL or by name
 sub _git_remote {
     my $remote = shift;
-    my $git = Git::Repository->new( work_tree => '.' );
+    my $git = eval { Git::Repository->new( work_tree => '.' ) } || return;
     my $cmd = $git->command( remote => '-v' );
 
     foreach ( $cmd->stdout->getlines() ) {
@@ -139,8 +140,9 @@ sub create {
     mkdir 'app';
 
     $self->msg('app/Makefile.PL');
-    write_file('app/Makefile.PL',{no_clobber => 1},
-        read_file(dist_file('App-Padadoy','Makefile.PL')));
+
+    copy( dist_file('App-Padadoy','Makefile.PL') => 'app/Makefile.PL' )
+        unless -e 'app/Makefile.PL';
 
     if ( $module ) {
         $self->msg("app/app.psgi (calling $module)");
@@ -193,7 +195,7 @@ sub create {
     make_path("perl");
     write_file('perl/index.pl',{no_clobber => 1},$content);
 
-    my %symlinks = (libs => 'app/lib','app/deplist.txt' => 'deplist.txt');
+    my %symlinks = (libs => 'app/lib');
     while (my ($from,$to) = each %symlinks) {
         $self->msg("$from -> $to");
         symlink $to, $from;
@@ -242,6 +244,10 @@ sub init {
     $self->_provide_config('init');
 
     try { 
+        unless( -d $self->{repository} ) {
+            $self->msg("creating repository directory: ".$self->{repository});
+            system("mkdir -p ".$self->{repository}); 
+        }
         my $out = capture('git', 'init', '--bare', $self->{repository});
         $self->msg(\'init',$_) for split "\n", $out;
     } catch {
@@ -250,13 +256,14 @@ sub init {
 
     my $file = $self->{repository}.'/hooks/update';
     $self->msg("$file as executable");
-    write_file($file, read_file(dist_file('App-Padadoy','update')));
-    chmod 0755,$file;
+
+    copy( dist_file('App-Padadoy','update') => $file );
+    chmod 0755, $file;
 
     $file = $self->{repository}.'/hooks/post-receive';
     $self->msg("$file as executable");
-    write_file($file, read_file(dist_file('App-Padadoy','post-receive')));
-    chmod 0755,$file;
+    copy( dist_file('App-Padadoy','post-receive') => $file );
+    chmod 0755, $file;
 
     $self->msg("logs/");
     mkdir 'logs';
@@ -383,10 +390,8 @@ Show some status information.
 sub status {
     my $self = shift;
 
-    fail "No configuration file found" unless $self->{config};
-    $self->msg("Configuration from ".$self->{config});
+    $self->msg("Configuration from ".$self->{config}) if $self->{config};
 
-    # PID file?
     my $pid = $self->_pid;
     if ($pid) {
         $self->msg("Process running: $pid (PID in %s)", $self->{pidfile});
@@ -486,9 +491,10 @@ Update dependencies with carton and run tests.
 
 sub cartontest {
     my $self = shift;
+    my $dir  = catdir( shift // $self->{base}, 'app' );
 
-    chdir $self->{base}.'/app';
-    $self->msg("installing dependencies and testing");
+    chdir $dir;
+    $self->msg("install dependencies and test in $dir");
 
     run('carton install');
     run('perl Makefile.PL');
@@ -510,11 +516,11 @@ sub update {
 
     # check out to $newdir
     $self->checkout($revision);
+
     my $revdir = catdir($self->{base},$revision);
     my $newdir = catdir($self->{base},'new');
 
-    # TODO: call directly
-    run('padadoy','cartontest',"base=$revdir");
+    $self->cartontest( $revdir );
 
     chdir $self->{base};
     run('rm','-f','new');
@@ -577,6 +583,7 @@ sub remote {
     $self->{remote} =~ /^(.+):(.+)$/ or fail 'invalid remote value: '.$self->{remote};
     my ($userhost,$dir) = ($1,$2);
     fail 'remote directory should not contain spaces' if $dir =~ /\s/;
+    $dir =~ s{/repository$}{};
 
     $self->msg("running padadoy on ".$self->{remote});
 
